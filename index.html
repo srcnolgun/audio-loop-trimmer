@@ -1,0 +1,1111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loop Trimmer</title>
+<meta name="description" content="Trim audio in your browser and preview the selected range as a loop before you cut. Export to MP3, OGG or WAV with adjustable quality. Runs 100% locally.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f6bed'/%3E%3Cpath d='M6 16h2m3-5v10m3-8v6m3-9v12m3-8v4m3-2h2' stroke='white' stroke-width='2.4' stroke-linecap='round' fill='none'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --surface-2:#eef0f4; --border:#dfe2e8;
+  --text:#1b1f27; --muted:#6a7280; --accent:#4f6bed; --accent-text:#ffffff;
+  --accent-soft:rgba(79,107,237,.14); --wave:#4f6bed; --wave-dim:#b9c0d4;
+  --danger:#d64545; --ok:#1f9d6b; --shadow:0 1px 2px rgba(20,24,40,.06),0 8px 24px rgba(20,24,40,.06);
+  --radius:14px;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0f1116; --surface:#171a22; --surface-2:#1f232d; --border:#2a2f3b;
+    --text:#e8eaf0; --muted:#8b93a5; --accent:#7b93ff; --accent-text:#0d1020;
+    --accent-soft:rgba(123,147,255,.16); --wave:#7b93ff; --wave-dim:#454c61;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1040px;margin:0 auto;padding:20px 16px 48px}
+header{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.logo{width:36px;height:36px;border-radius:10px;background:var(--accent);display:grid;place-items:center;flex:none}
+.logo svg{width:22px;height:22px}
+h1{font-size:20px;margin:0;letter-spacing:-.01em}
+.tagline{color:var(--muted);font-size:13px;margin:0}
+header .spacer{flex:1}
+header a{color:var(--muted);font-size:13px;text-decoration:none}
+header a:hover{color:var(--text)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.hidden{display:none!important}
+
+/* drop zone */
+.drop{padding:56px 24px;text-align:center;border:2px dashed var(--border);background:var(--surface);border-radius:var(--radius);transition:border-color .15s,background .15s}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop h2{margin:0 0 6px;font-size:18px}
+.drop p{margin:0 0 20px;color:var(--muted)}
+.drop .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.bullets{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:26px;color:var(--muted);font-size:13px}
+.bullets span::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:7px;vertical-align:middle}
+
+/* buttons & controls */
+button,select,input{font:inherit;color:inherit}
+.btn{appearance:none;border:1px solid var(--border);background:var(--surface-2);color:var(--text);padding:8px 14px;border-radius:10px;cursor:pointer;font-weight:500;display:inline-flex;align-items:center;gap:8px;transition:background .12s,border-color .12s,transform .05s}
+.btn:hover{border-color:var(--muted)}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.small{padding:5px 10px;font-size:13px;border-radius:8px}
+.btn.icon{padding:7px 9px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn svg{width:16px;height:16px;flex:none}
+
+/* editor */
+.editor{display:flex;flex-direction:column;gap:16px}
+.fileinfo{display:flex;align-items:center;gap:12px;padding:12px 16px;flex-wrap:wrap}
+.fileinfo .name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;min-width:0;flex:1 1 200px}
+.fileinfo .meta{color:var(--muted);font-size:13px}
+.stage{padding:14px 16px 16px}
+.toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.playbtn{width:46px;height:46px;border-radius:50%;padding:0;justify-content:center}
+.playbtn svg{width:20px;height:20px}
+.time{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);min-width:120px}
+.time b{color:var(--text);font-weight:600}
+.switch{display:inline-flex;align-items:center;gap:9px;cursor:pointer;user-select:none;font-weight:500}
+.switch input{position:absolute;opacity:0;pointer-events:none}
+.switch .track{width:38px;height:22px;border-radius:99px;background:var(--wave-dim);position:relative;transition:background .15s;flex:none}
+.switch .track::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.switch input:checked + .track{background:var(--accent)}
+.switch input:checked + .track::after{transform:translateX(16px)}
+.switch input:focus-visible + .track{outline:2px solid var(--accent);outline-offset:2px}
+.grow{flex:1}
+.vol{display:flex;align-items:center;gap:8px;color:var(--muted)}
+.vol svg{width:18px;height:18px}
+input[type=range]{accent-color:var(--accent);cursor:pointer}
+.zoom{display:flex;gap:6px}
+
+.wavebox{position:relative;border-radius:10px;overflow:hidden;background:var(--surface-2);border:1px solid var(--border)}
+canvas{display:block;width:100%}
+#wave{height:210px;touch-action:none;cursor:crosshair}
+#overview{height:44px;margin-top:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);cursor:pointer;touch-action:none}
+.hint{margin:8px 2px 0;color:var(--muted);font-size:12.5px}
+
+.sel{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:14px;align-items:end}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:500}
+.field input[type=text],.field select,.field input[type=number]{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-variant-numeric:tabular-nums}
+.field input:focus,.field select:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
+.sel .actions{display:flex;gap:8px;flex-wrap:wrap}
+.check{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;user-select:none}
+.check input{accent-color:var(--accent);width:16px;height:16px}
+.field label.check{display:inline-flex;font-size:14px;color:var(--text);margin:0;font-weight:400;padding-bottom:9px}
+
+/* export */
+.export{padding:18px 16px}
+.export h2{margin:0 0 4px;font-size:16px}
+.export .sub{margin:0 0 14px;color:var(--muted);font-size:13px}
+.presets{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+.presets .lbl{font-size:12px;color:var(--muted);font-weight:500;margin-right:2px}
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:3px;gap:2px}
+.seg button{appearance:none;border:0;background:transparent;padding:6px 16px;border-radius:7px;cursor:pointer;font-weight:600;color:var(--muted)}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-text)}
+.exgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin:16px 0}
+.qval{font-variant-numeric:tabular-nums;color:var(--text);font-weight:600}
+.exfoot{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:6px}
+.est{color:var(--muted);font-size:14px}
+.est b{color:var(--text);font-size:16px}
+.progress{height:6px;border-radius:99px;background:var(--surface-2);overflow:hidden;margin-top:14px}
+.progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .1s}
+.result{margin-top:16px;padding:14px;border-radius:10px;background:var(--accent-soft);display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.result .info{flex:1 1 220px;min-width:0}
+.result .info b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.result .info span{color:var(--muted);font-size:13px}
+.result audio{height:36px;max-width:100%}
+.status{min-height:20px;margin-top:12px;font-size:13px;color:var(--muted)}
+.status.err{color:var(--danger)}
+footer{margin-top:28px;text-align:center;color:var(--muted);font-size:12.5px}
+footer a{color:inherit}
+kbd{font:600 11px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--surface-2);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:1px 5px}
+.dragveil{position:fixed;inset:0;background:var(--accent-soft);border:3px dashed var(--accent);z-index:50;display:none;place-items:center;font-size:22px;font-weight:600;pointer-events:none}
+.dragveil.on{display:grid}
+@media (max-width:560px){ #wave{height:170px} .time{min-width:0} .sel .actions{grid-column:1/-1} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M5 16h2m3-6v12m3-9v6m3-11v16m3-10v4m3-2h2"/></svg></div>
+    <div>
+      <h1>Loop Trimmer</h1>
+      <p class="tagline">Hear your selection on repeat, then cut. Everything stays in your browser.</p>
+    </div>
+    <div class="spacer"></div>
+    <a id="repoLink" class="hidden" target="_blank" rel="noopener">GitHub</a>
+  </header>
+
+  <!-- empty state -->
+  <section id="empty" class="drop" aria-label="Load audio">
+    <h2>Drop an audio file here</h2>
+    <p>MP3, WAV, OGG, M4A, FLAC, WebM &mdash; whatever your browser can decode.</p>
+    <div class="row">
+      <button class="btn primary" id="browseBtn" type="button">Choose file&hellip;</button>
+      <button class="btn" id="demoBtn" type="button">Try a demo loop</button>
+    </div>
+    <div class="bullets">
+      <span>Loop-preview the selection before cutting</span>
+      <span>Export MP3 / OGG / WAV with quality control</span>
+      <span>No upload &mdash; 100% local</span>
+    </div>
+    <input id="fileInput" type="file" accept="audio/*,video/mp4,video/webm,.mp3,.wav,.ogg,.oga,.m4a,.aac,.flac,.opus,.webm" hidden>
+  </section>
+
+  <!-- editor -->
+  <main id="editor" class="editor hidden">
+    <div class="card fileinfo">
+      <div class="name" id="fileName">&mdash;</div>
+      <div class="meta" id="fileMeta"></div>
+      <button class="btn small" id="newFileBtn" type="button">Open another file</button>
+    </div>
+
+    <div class="card stage">
+      <div class="toolbar">
+        <button class="btn primary playbtn" id="playBtn" type="button" aria-label="Play selection">
+          <svg id="icoPlay" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          <svg id="icoPause" class="hidden" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+        </button>
+        <div class="time" aria-live="off"><b id="tNow">0:00.000</b> <span id="tRange"></span></div>
+        <label class="switch" title="Repeat the selected range (L)">
+          <input type="checkbox" id="loopChk" checked>
+          <span class="track"></span><span>Loop selection</span>
+        </label>
+        <span class="grow"></span>
+        <div class="vol" title="Volume">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 10v4h4l5 4V6L7 10zm13.5 2A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
+          <input type="range" id="vol" min="0" max="1" step="0.01" value="0.9" aria-label="Volume">
+        </div>
+        <div class="zoom">
+          <button class="btn small icon" id="zOut" type="button" title="Zoom out (-)" aria-label="Zoom out">&minus;</button>
+          <button class="btn small icon" id="zIn" type="button" title="Zoom in (+)" aria-label="Zoom in">+</button>
+          <button class="btn small" id="zSel" type="button" title="Zoom to selection">Zoom to selection</button>
+          <button class="btn small" id="zAll" type="button" title="Show whole file (0)">Fit</button>
+        </div>
+      </div>
+
+      <div class="wavebox"><canvas id="wave" aria-label="Waveform. Drag to select a range."></canvas></div>
+      <canvas id="overview" aria-label="Overview"></canvas>
+      <p class="hint">Drag on the waveform to select &middot; drag the handles to fine-tune (the loop updates live) &middot; scroll to zoom, <kbd>Shift</kbd>+scroll to pan &middot; <kbd>Space</kbd> play/pause &middot; <kbd>I</kbd>/<kbd>O</kbd> set start/end at playhead &middot; <kbd>L</kbd> loop</p>
+
+      <div class="sel">
+        <div class="field"><label for="inStart">Start</label><input type="text" id="inStart" inputmode="decimal" spellcheck="false" autocomplete="off"></div>
+        <div class="field"><label for="inEnd">End</label><input type="text" id="inEnd" inputmode="decimal" spellcheck="false" autocomplete="off"></div>
+        <div class="field"><label for="inLen">Length</label><input type="text" id="inLen" readonly tabindex="-1"></div>
+        <div class="actions">
+          <button class="btn small" id="setStart" type="button" title="Start = playhead (I)">Start &larr; playhead</button>
+          <button class="btn small" id="setEnd" type="button" title="End = playhead (O)">End &larr; playhead</button>
+          <button class="btn small" id="selAll" type="button">Select all</button>
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <label class="check" title="Moves cut points to the nearest zero crossing so loops and cuts don't click"><input type="checkbox" id="snapChk" checked> Snap cut points to zero crossings (avoids clicks)</label>
+      </div>
+    </div>
+
+    <div class="card export">
+      <h2>Export</h2>
+      <p class="sub">Only the selected range is exported. Pick a quality that fits your size budget.</p>
+
+      <div class="presets" role="group" aria-label="Presets">
+        <span class="lbl">Presets</span>
+        <button class="btn small" type="button" data-preset="tiny" title="MP3 48 kbps, mono, 22.05 kHz">Tiny (playables)</button>
+        <button class="btn small" type="button" data-preset="small" title="OGG Vorbis q3">Small</button>
+        <button class="btn small" type="button" data-preset="balanced" title="MP3 128 kbps">Balanced</button>
+        <button class="btn small" type="button" data-preset="lossless" title="WAV 16-bit">Lossless</button>
+      </div>
+
+      <div class="seg" role="group" aria-label="Format" id="fmtSeg">
+        <button type="button" data-fmt="mp3" aria-pressed="true">MP3</button>
+        <button type="button" data-fmt="ogg" aria-pressed="false">OGG</button>
+        <button type="button" data-fmt="wav" aria-pressed="false">WAV</button>
+      </div>
+
+      <div class="exgrid">
+        <div class="field" data-for="mp3">
+          <label for="mp3Q">MP3 quality</label>
+          <select id="mp3Q">
+            <optgroup label="Constant bitrate">
+              <option value="c32">32 kbps</option><option value="c48">48 kbps</option><option value="c64">64 kbps</option>
+              <option value="c96">96 kbps</option><option value="c128" selected>128 kbps</option><option value="c160">160 kbps</option>
+              <option value="c192">192 kbps</option><option value="c256">256 kbps</option><option value="c320">320 kbps</option>
+            </optgroup>
+            <optgroup label="Variable bitrate (smaller for same quality)">
+              <option value="v0">VBR V0 (best, ~245 kbps)</option><option value="v2">VBR V2 (~190 kbps)</option>
+              <option value="v4">VBR V4 (~165 kbps)</option><option value="v6">VBR V6 (~115 kbps)</option><option value="v8">VBR V8 (~85 kbps)</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="field hidden" data-for="ogg">
+          <label for="oggQ">Vorbis quality: <span class="qval" id="oggQv">4</span> <span id="oggQk" style="color:var(--muted)"></span></label>
+          <input type="range" id="oggQ" min="-1" max="10" step="0.5" value="4" style="width:100%">
+        </div>
+        <div class="field hidden" data-for="wav">
+          <label for="wavBits">WAV bit depth</label>
+          <select id="wavBits"><option value="8">8-bit</option><option value="16" selected>16-bit</option><option value="24">24-bit</option><option value="32">32-bit float</option></select>
+        </div>
+        <div class="field">
+          <label for="rateSel">Sample rate</label>
+          <select id="rateSel">
+            <option value="auto">Same as source</option><option value="48000">48 kHz</option><option value="44100">44.1 kHz</option>
+            <option value="32000">32 kHz</option><option value="24000">24 kHz</option><option value="22050">22.05 kHz</option>
+            <option value="16000">16 kHz</option><option value="11025">11.025 kHz</option><option value="8000">8 kHz</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="chSel">Channels</label>
+          <select id="chSel"><option value="auto">Same as source</option><option value="mono">Mono (halves the data)</option></select>
+        </div>
+        <div class="field">
+          <label for="fadeIn">Fade in (ms)</label>
+          <input type="number" id="fadeIn" min="0" max="5000" step="10" value="0">
+        </div>
+        <div class="field">
+          <label for="fadeOut">Fade out (ms)</label>
+          <input type="number" id="fadeOut" min="0" max="5000" step="10" value="0">
+        </div>
+        <div class="field" style="align-self:end">
+          <label class="check"><input type="checkbox" id="normChk"> Normalize peak to &minus;0.2 dB</label>
+        </div>
+      </div>
+
+      <div class="exfoot">
+        <button class="btn primary" id="exportBtn" type="button">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 20h14v-2H5zM19 9h-4V3H9v6H5l7 7z"/></svg>
+          <span id="exportLbl">Export selection</span>
+        </button>
+        <div class="est" id="est"></div>
+      </div>
+      <div class="progress hidden" id="prog"><i></i></div>
+
+      <div class="result hidden" id="result">
+        <div class="info"><b id="resName"></b><span id="resInfo"></span></div>
+        <audio id="resAudio" controls></audio>
+        <a class="btn small" id="resDl">Download again</a>
+      </div>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+    </div>
+  </main>
+
+  <footer>Runs entirely in your browser &middot; nothing is uploaded &middot; MIT licensed</footer>
+</div>
+<div class="dragveil" id="veil">Drop audio to load</div>
+
+<script>
+(() => {
+'use strict';
+
+// Set this to your repository URL to show a GitHub link in the header.
+const REPO_URL = '';
+
+const $ = id => document.getElementById(id);
+const el = {
+  empty:$('empty'), editor:$('editor'), fileInput:$('fileInput'), browse:$('browseBtn'), demo:$('demoBtn'), newFile:$('newFileBtn'),
+  fileName:$('fileName'), fileMeta:$('fileMeta'), play:$('playBtn'), icoPlay:$('icoPlay'), icoPause:$('icoPause'),
+  tNow:$('tNow'), tRange:$('tRange'), loop:$('loopChk'), vol:$('vol'),
+  zIn:$('zIn'), zOut:$('zOut'), zSel:$('zSel'), zAll:$('zAll'),
+  wave:$('wave'), overview:$('overview'),
+  inStart:$('inStart'), inEnd:$('inEnd'), inLen:$('inLen'), setStart:$('setStart'), setEnd:$('setEnd'), selAll:$('selAll'), snap:$('snapChk'),
+  mp3Q:$('mp3Q'), oggQ:$('oggQ'), oggQv:$('oggQv'), oggQk:$('oggQk'), wavBits:$('wavBits'), rate:$('rateSel'), ch:$('chSel'),
+  fadeIn:$('fadeIn'), fadeOut:$('fadeOut'), norm:$('normChk'),
+  exportBtn:$('exportBtn'), exportLbl:$('exportLbl'), est:$('est'), prog:$('prog'), status:$('status'),
+  result:$('result'), resName:$('resName'), resInfo:$('resInfo'), resAudio:$('resAudio'), resDl:$('resDl'), veil:$('veil'),
+};
+if (REPO_URL) { const a = $('repoLink'); a.href = REPO_URL; a.classList.remove('hidden'); }
+
+/* ---------------------------------------------------------------- state */
+const MIN_SEL = 0.01;       // seconds
+const MIN_VIEW = 0.02;      // seconds
+const BLOCK = 64;           // samples per peak block
+const S = {
+  buf:null, name:'', sr:44100, dur:0, fileSize:0,
+  sel:{s:0,e:0}, view:{s:0,e:0}, pos:0,
+  loop:true, snap:true, fmt:'mp3', peaks:null,
+};
+let ctx = null, master = null;
+
+function getCtx() {
+  if (!ctx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    ctx = new AC();
+    master = ctx.createGain();
+    master.gain.value = +el.vol.value;
+    master.connect(ctx.destination);
+  }
+  return ctx;
+}
+
+/* ---------------------------------------------------------------- helpers */
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+function fmtTime(t, ms = true) {
+  if (!isFinite(t)) t = 0;
+  t = Math.max(0, t);
+  const m = Math.floor(t / 60);
+  const s = t - m * 60;
+  const str = ms ? s.toFixed(3).padStart(6, '0') : Math.floor(s).toString().padStart(2, '0');
+  return `${m}:${str}`;
+}
+function parseTime(str) {
+  str = String(str).trim().replace(',', '.');
+  if (!str) return NaN;
+  const parts = str.split(':');
+  if (parts.length > 3) return NaN;
+  let total = 0;
+  for (const p of parts) { const n = Number(p); if (!isFinite(n) || n < 0) return NaN; total = total * 60 + n; }
+  return total;
+}
+function fmtBytes(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(n < 10240 ? 1 : 0) + ' KB';
+  return (n / 1048576).toFixed(2) + ' MB';
+}
+function setStatus(msg, err = false) { el.status.textContent = msg || ''; el.status.classList.toggle('err', err); }
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => r()));
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+/* ---------------------------------------------------------------- loading */
+async function loadFile(file) {
+  if (!file) return;
+  setStatus('Decoding…');
+  try {
+    const ab = await file.arrayBuffer();
+    const buf = await getCtx().decodeAudioData(ab);
+    S.fileSize = file.size;
+    openBuffer(buf, file.name);
+    setStatus('');
+  } catch (err) {
+    console.error(err);
+    setStatus("Couldn't decode that file. Try MP3, WAV, OGG, M4A or FLAC.", true);
+    if (el.editor.classList.contains('hidden')) alert("Couldn't decode that file. Try MP3, WAV, OGG, M4A or FLAC.");
+  }
+}
+
+function openBuffer(buf, name) {
+  stop();
+  S.buf = buf; S.name = name; S.sr = buf.sampleRate; S.dur = buf.duration;
+  buildPeaks();
+  S.sel = { s: 0, e: S.dur };
+  S.view = { s: 0, e: S.dur };
+  S.pos = 0;
+  el.empty.classList.add('hidden');
+  el.editor.classList.remove('hidden');
+  el.fileName.textContent = name;
+  el.fileMeta.textContent = `${fmtTime(S.dur)} · ${(S.sr / 1000).toFixed(S.sr % 1000 ? 1 : 0)} kHz · ${buf.numberOfChannels === 1 ? 'mono' : buf.numberOfChannels === 2 ? 'stereo' : buf.numberOfChannels + ' ch'}` + (S.fileSize ? ` · ${fmtBytes(S.fileSize)}` : '');
+  const mono = buf.numberOfChannels === 1;
+  el.ch.querySelector('option[value=mono]').disabled = mono;
+  if (mono) el.ch.value = 'auto';
+  el.result.classList.add('hidden');
+  resizeCanvases();
+  onSelectionChanged(false);
+  requestDraw();
+}
+
+function makeDemo() {
+  const sr = 44100, dur = 8, n = sr * dur;
+  const buf = new AudioBuffer({ length: n, numberOfChannels: 2, sampleRate: sr });
+  const L = buf.getChannelData(0), R = buf.getChannelData(1);
+  const scale = [261.63, 329.63, 392.0, 440.0, 523.25, 440.0, 392.0, 329.63];
+  const step = 0.25;
+  for (let k = 0; k < dur / step; k++) {
+    const f = scale[k % scale.length] * (k >= 16 ? 1.5 : 1);
+    const t0 = Math.floor(k * step * sr), len = Math.floor(step * sr * 1.6);
+    const pan = (k % 2) ? 0.65 : 0.35;
+    for (let i = 0; i < len && t0 + i < n; i++) {
+      const t = i / sr, env = Math.exp(-t * 7) * Math.min(1, t * 400);
+      const v = (Math.sin(2 * Math.PI * f * t) + 0.35 * Math.sin(4 * Math.PI * f * t) + 0.15 * Math.sin(6 * Math.PI * f * t)) * env * 0.28;
+      L[t0 + i] += v * (1 - pan) * 1.6; R[t0 + i] += v * pan * 1.6;
+    }
+  }
+  for (let b = 0; b < dur * 2; b++) {
+    const t0 = Math.floor(b * 0.5 * sr), len = Math.floor(0.22 * sr);
+    let phase = 0;
+    for (let i = 0; i < len && t0 + i < n; i++) {
+      const t = i / sr, fr = 45 + 90 * Math.exp(-t * 28);
+      phase += 2 * Math.PI * fr / sr;
+      const v = Math.sin(phase) * Math.exp(-t * 14) * 0.7;
+      L[t0 + i] += v; R[t0 + i] += v;
+    }
+  }
+  for (let i = 0; i < n; i++) { L[i] = Math.tanh(L[i]); R[i] = Math.tanh(R[i]); }
+  S.fileSize = 0;
+  openBuffer(buf, 'demo-loop.wav');
+  S.sel = { s: 2.0, e: 4.0 };
+  S.pos = 2.0;
+  onSelectionChanged(false);
+  requestDraw();
+}
+
+/* ---------------------------------------------------------------- peaks */
+function buildPeaks() {
+  const b = S.buf, n = b.length, nb = Math.ceil(n / BLOCK);
+  const mn = new Float32Array(nb).fill(1), mx = new Float32Array(nb).fill(-1);
+  for (let c = 0; c < b.numberOfChannels; c++) {
+    const d = b.getChannelData(c);
+    for (let i = 0; i < nb; i++) {
+      const a = i * BLOCK, e = Math.min(n, a + BLOCK);
+      let lo = mn[i], hi = mx[i];
+      for (let j = a; j < e; j++) { const v = d[j]; if (v < lo) lo = v; if (v > hi) hi = v; }
+      mn[i] = lo; mx[i] = hi;
+    }
+  }
+  S.peaks = { mn, mx, nb };
+}
+
+function columnPeaks(t0, t1, w) {
+  const b = S.buf, n = b.length, sr = S.sr;
+  const mins = new Float32Array(w), maxs = new Float32Array(w);
+  const spp = (t1 - t0) * sr / w;
+  const useBlocks = spp >= BLOCK * 2;
+  const chans = []; for (let c = 0; c < b.numberOfChannels; c++) chans.push(b.getChannelData(c));
+  for (let x = 0; x < w; x++) {
+    let a = Math.floor(t0 * sr + x * spp), e = Math.floor(t0 * sr + (x + 1) * spp);
+    if (e <= a) e = a + 1;
+    a = Math.max(0, a); e = Math.min(n, e);
+    if (a >= e) continue;
+    let lo = 1, hi = -1;
+    if (useBlocks) {
+      const ba = Math.floor(a / BLOCK), bb = Math.min(S.peaks.nb, Math.ceil(e / BLOCK));
+      for (let i = ba; i < bb; i++) { if (S.peaks.mn[i] < lo) lo = S.peaks.mn[i]; if (S.peaks.mx[i] > hi) hi = S.peaks.mx[i]; }
+    } else {
+      for (const d of chans) for (let i = a; i < e; i++) { const v = d[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
+    }
+    mins[x] = lo; maxs[x] = hi;
+  }
+  return { mins, maxs };
+}
+
+/* ---------------------------------------------------------------- zero-crossing snap */
+function monoAt(i) {
+  const b = S.buf; let v = 0;
+  for (let c = 0; c < b.numberOfChannels; c++) v += b.getChannelData(c)[i];
+  return v / b.numberOfChannels;
+}
+function snapTime(t) {
+  if (!S.snap || !S.buf) return t;
+  const n = S.buf.length;
+  const i0 = clamp(Math.round(t * S.sr), 1, n - 1);
+  const R = Math.round(0.012 * S.sr);
+  let best = -1, bestD = Infinity;
+  for (let d = 0; d <= R; d++) {
+    for (const i of d === 0 ? [i0] : [i0 - d, i0 + d]) {
+      if (i < 1 || i >= n) continue;
+      const a = monoAt(i - 1), b = monoAt(i);
+      if ((a <= 0 && b > 0) || (a >= 0 && b < 0) || b === 0) { best = i; bestD = d; break; }
+    }
+    if (best >= 0) break;
+  }
+  return best >= 0 ? best / S.sr : t;
+}
+
+/* ---------------------------------------------------------------- canvas drawing */
+const cv = { wave: el.wave.getContext('2d'), ov: el.overview.getContext('2d') };
+let dpr = 1, W = 0, H = 0, OW = 0, OH = 0;
+let colors = {};
+let waveCache = null, ovCache = null;
+function readColors() {
+  const cs = getComputedStyle(document.documentElement);
+  const g = n => cs.getPropertyValue(n).trim();
+  colors = { wave: g('--wave'), dim: g('--wave-dim'), text: g('--text'), muted: g('--muted'), accent: g('--accent'), soft: g('--accent-soft'), border: g('--border'), surface2: g('--surface-2') };
+}
+readColors();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { readColors(); requestDraw(); });
+
+function resizeCanvases() {
+  dpr = window.devicePixelRatio || 1;
+  const sizeOf = (c) => { const r = c.getBoundingClientRect(); c.width = Math.max(1, Math.round(r.width * dpr)); c.height = Math.max(1, Math.round(r.height * dpr)); return [r.width, r.height]; };
+  [W, H] = sizeOf(el.wave);
+  [OW, OH] = sizeOf(el.overview);
+  waveCache = ovCache = null;
+  requestDraw();
+}
+new ResizeObserver(() => { if (S.buf) resizeCanvases(); }).observe(el.wave);
+window.addEventListener('resize', () => { if (S.buf) resizeCanvases(); });
+
+const xOf = t => (t - S.view.s) / (S.view.e - S.view.s) * W;
+const tOf = x => S.view.s + x / W * (S.view.e - S.view.s);
+const RULER = 22;
+
+let drawQueued = false;
+function requestDraw() { if (drawQueued) return; drawQueued = true; requestAnimationFrame(() => { drawQueued = false; draw(); }); }
+
+function drawWaveBars(g, pk, w, top, h, color) {
+  g.fillStyle = color;
+  const mid = top + h / 2, half = h / 2 * 0.94;
+  for (let x = 0; x < w; x++) {
+    const lo = pk.mins[x], hi = pk.maxs[x];
+    if (lo > hi) continue;
+    const y0 = mid - hi * half, y1 = mid - lo * half;
+    g.fillRect(x, y0, 1, Math.max(1 / dpr, y1 - y0));
+  }
+}
+
+function draw() {
+  if (!S.buf || !W) return;
+  const g = cv.wave;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+
+  // waveform peaks (cached per view + size)
+  const wPx = Math.round(W);
+  const key = `${S.view.s}|${S.view.e}|${wPx}`;
+  if (!waveCache || waveCache.key !== key) waveCache = { key, pk: columnPeaks(S.view.s, S.view.e, wPx) };
+
+  const top = RULER, h = H - RULER;
+  // centre line
+  g.fillStyle = colors.border; g.fillRect(0, top + h / 2, W, 1);
+
+  const xs = clamp(xOf(S.sel.s), -2, W + 2), xe = clamp(xOf(S.sel.e), -2, W + 2);
+  // selection background
+  g.fillStyle = colors.soft; g.fillRect(xs, top, xe - xs, h);
+  // dim waveform everywhere, accent inside selection
+  g.save(); g.scale(1, 1);
+  drawWaveBars(g, waveCache.pk, wPx, top, h, colors.dim);
+  g.save(); g.beginPath(); g.rect(xs, top, xe - xs, h); g.clip();
+  drawWaveBars(g, waveCache.pk, wPx, top, h, colors.wave);
+  g.restore(); g.restore();
+
+  // ruler
+  const span = S.view.e - S.view.s;
+  const steps = [0.001,0.002,0.005,0.01,0.02,0.05,0.1,0.2,0.5,1,2,5,10,15,30,60,120,300,600,1800,3600];
+  let step = steps.find(s => s / span * W >= 90) || 3600;
+  const dec = step < 0.01 ? 3 : step < 0.1 ? 2 : step < 1 ? 1 : 0;
+  g.font = '11px system-ui,sans-serif'; g.textBaseline = 'middle'; g.fillStyle = colors.muted; g.strokeStyle = colors.border; g.lineWidth = 1;
+  g.beginPath();
+  for (let t = Math.ceil(S.view.s / step) * step; t < S.view.e; t += step) {
+    const x = Math.round(xOf(t)) + .5;
+    g.moveTo(x, RULER - 6); g.lineTo(x, RULER);
+    const m = Math.floor(t / 60), s = t - m * 60;
+    g.fillText(`${m}:${s.toFixed(dec).padStart(dec ? 3 + dec : 2, '0')}`, x + 4, RULER / 2 - 1);
+  }
+  g.stroke();
+  g.fillStyle = colors.border; g.fillRect(0, RULER - 1, W, 1);
+
+  // selection edges + handles
+  const drawHandle = (x, dir) => {
+    g.fillStyle = colors.accent; g.fillRect(Math.round(x) - 1, top, 2, h);
+    const gw = 9, gh = 34, gy = top + h / 2 - gh / 2, gx = dir < 0 ? x - gw : x;
+    g.beginPath(); g.roundRect(gx, gy, gw, gh, 4); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 1.2; g.beginPath();
+    g.moveTo(gx + gw / 2 - 1.5, gy + 9); g.lineTo(gx + gw / 2 - 1.5, gy + gh - 9);
+    g.moveTo(gx + gw / 2 + 1.5, gy + 9); g.lineTo(gx + gw / 2 + 1.5, gy + gh - 9); g.stroke();
+  };
+  if (S.sel.s >= S.view.s - 0.001 && S.sel.s <= S.view.e) drawHandle(xOf(S.sel.s), -1);
+  if (S.sel.e >= S.view.s && S.sel.e <= S.view.e + 0.001) drawHandle(xOf(S.sel.e), 1);
+
+  // playhead
+  const p = curPos();
+  if (p >= S.view.s && p <= S.view.e) {
+    const x = Math.round(xOf(p));
+    g.fillStyle = colors.text; g.fillRect(x - 0.5, RULER, 1.5, H - RULER);
+    g.beginPath(); g.moveTo(x - 5, RULER); g.lineTo(x + 6, RULER); g.lineTo(x + .5, RULER + 7); g.closePath(); g.fill();
+  }
+
+  drawOverview();
+  el.tNow.textContent = fmtTime(p);
+}
+
+function drawOverview() {
+  const g = cv.ov;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, OW, OH);
+  const wPx = Math.round(OW);
+  if (!ovCache || ovCache.w !== wPx) ovCache = { w: wPx, pk: columnPeaks(0, S.dur, wPx) };
+  drawWaveBars(g, ovCache.pk, wPx, 2, OH - 4, colors.dim);
+  const x0 = S.sel.s / S.dur * OW, x1 = S.sel.e / S.dur * OW;
+  g.save(); g.beginPath(); g.rect(x0, 0, Math.max(1, x1 - x0), OH); g.clip();
+  g.fillStyle = colors.soft; g.fillRect(x0, 0, x1 - x0, OH);
+  drawWaveBars(g, ovCache.pk, wPx, 2, OH - 4, colors.wave);
+  g.restore();
+  // viewport window
+  const v0 = S.view.s / S.dur * OW, v1 = S.view.e / S.dur * OW;
+  g.strokeStyle = colors.text; g.globalAlpha = .7; g.lineWidth = 1.5;
+  g.strokeRect(v0 + .75, .75, Math.max(2, v1 - v0) - 1.5, OH - 1.5);
+  g.globalAlpha = 1;
+  const px = curPos() / S.dur * OW;
+  g.fillStyle = colors.text; g.fillRect(px - .5, 0, 1.5, OH);
+}
+
+/* ---------------------------------------------------------------- view control */
+function setView(s, e) {
+  const span = clamp(e - s, Math.min(MIN_VIEW, S.dur), S.dur);
+  s = clamp(s, 0, S.dur - span);
+  S.view = { s, e: s + span };
+  requestDraw();
+}
+function zoomAt(factor, t) {
+  const span = S.view.e - S.view.s, ns = clamp(span * factor, Math.min(MIN_VIEW, S.dur), S.dur);
+  const rel = (t - S.view.s) / span;
+  setView(t - rel * ns, t - rel * ns + ns);
+}
+el.wave.addEventListener('wheel', e => {
+  if (!S.buf) return;
+  e.preventDefault();
+  const span = S.view.e - S.view.s;
+  if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+    const d = (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY);
+    setView(S.view.s + d / W * span, S.view.e + d / W * span);
+  } else {
+    const rect = el.wave.getBoundingClientRect();
+    zoomAt(Math.exp(e.deltaY * 0.0015), tOf(e.clientX - rect.left));
+  }
+}, { passive: false });
+el.zIn.onclick = () => zoomAt(0.5, (S.view.s + S.view.e) / 2);
+el.zOut.onclick = () => zoomAt(2, (S.view.s + S.view.e) / 2);
+el.zAll.onclick = () => setView(0, S.dur);
+el.zSel.onclick = () => { const pad = (S.sel.e - S.sel.s) * 0.08; setView(S.sel.s - pad, S.sel.e + pad); };
+
+/* ---------------------------------------------------------------- selection interaction */
+const HANDLE = 10;
+let drag = null;
+function hitMode(x) {
+  const hs = xOf(S.sel.s), he = xOf(S.sel.e);
+  const ds = Math.abs(x - hs), de = Math.abs(x - he);
+  if (ds <= HANDLE && ds <= de) return 'start';
+  if (de <= HANDLE) return 'end';
+  if (x > hs && x < he) return 'move';
+  return 'create';
+}
+el.wave.addEventListener('pointerdown', e => {
+  if (!S.buf || e.button > 0) return;
+  const r = el.wave.getBoundingClientRect(), x = e.clientX - r.left;
+  if (e.clientY - r.top < RULER) { seekTo(tOf(x)); return; }
+  drag = { mode: hitMode(x), x0: x, t0: tOf(x), sel0: { ...S.sel }, moved: false };
+  el.wave.setPointerCapture(e.pointerId);
+});
+el.wave.addEventListener('pointermove', e => {
+  const r = el.wave.getBoundingClientRect(), x = e.clientX - r.left;
+  if (!drag) {
+    const m = S.buf ? hitMode(x) : 'create';
+    el.wave.style.cursor = m === 'start' || m === 'end' ? 'ew-resize' : m === 'move' ? 'grab' : 'crosshair';
+    return;
+  }
+  if (!drag.moved && Math.abs(x - drag.x0) < 3) return;
+  drag.moved = true;
+  const t = clamp(tOf(x), 0, S.dur);
+  const { s: s0, e: e0 } = drag.sel0;
+  if (drag.mode === 'start') {
+    S.sel.s = clamp(snapTime(t), 0, S.sel.e - MIN_SEL);
+  } else if (drag.mode === 'end') {
+    S.sel.e = clamp(snapTime(t), S.sel.s + MIN_SEL, S.dur);
+  } else if (drag.mode === 'move') {
+    el.wave.style.cursor = 'grabbing';
+    const len = e0 - s0, d = t - drag.t0;
+    const ns = clamp(s0 + d, 0, S.dur - len);
+    S.sel.s = ns; S.sel.e = ns + len;
+  } else {
+    let a = Math.min(drag.t0, t), b = Math.max(drag.t0, t);
+    a = clamp(snapTime(a), 0, S.dur); b = clamp(snapTime(b), 0, S.dur);
+    if (b - a < MIN_SEL) b = Math.min(S.dur, a + MIN_SEL);
+    S.sel.s = a; S.sel.e = b;
+  }
+  onSelectionChanged(true);
+});
+function endDrag(e) {
+  if (!drag) return;
+  if (!drag.moved && drag.mode === 'move') {
+    const r = el.wave.getBoundingClientRect();
+    seekTo(tOf(e.clientX - r.left));
+  }
+  drag = null;
+  el.wave.style.cursor = 'crosshair';
+}
+el.wave.addEventListener('pointerup', endDrag);
+el.wave.addEventListener('pointercancel', () => { drag = null; });
+
+function seekTo(t) {
+  t = clamp(t, S.sel.s, Math.max(S.sel.s, S.sel.e - 0.001));
+  if (P.playing) play(t); else { S.pos = t; requestDraw(); }
+}
+
+// overview strip
+let ovDrag = null;
+el.overview.addEventListener('pointerdown', e => {
+  if (!S.buf) return;
+  const r = el.overview.getBoundingClientRect(), t = (e.clientX - r.left) / r.width * S.dur;
+  const span = S.view.e - S.view.s;
+  ovDrag = (t >= S.view.s && t <= S.view.e) ? { off: t - S.view.s } : { off: span / 2 };
+  setView(t - ovDrag.off, t - ovDrag.off + span);
+  el.overview.setPointerCapture(e.pointerId);
+});
+el.overview.addEventListener('pointermove', e => {
+  if (!ovDrag) return;
+  const r = el.overview.getBoundingClientRect(), t = (e.clientX - r.left) / r.width * S.dur, span = S.view.e - S.view.s;
+  setView(t - ovDrag.off, t - ovDrag.off + span);
+});
+el.overview.addEventListener('pointerup', () => { ovDrag = null; });
+
+// numeric inputs
+function commitInput(which) {
+  const inp = which === 'start' ? el.inStart : el.inEnd;
+  const v = parseTime(inp.value);
+  if (isNaN(v)) { syncInputs(); return; }
+  if (which === 'start') S.sel.s = clamp(v, 0, S.sel.e - MIN_SEL);
+  else S.sel.e = clamp(v, S.sel.s + MIN_SEL, S.dur);
+  onSelectionChanged(true);
+}
+for (const [inp, which] of [[el.inStart, 'start'], [el.inEnd, 'end']]) {
+  inp.addEventListener('change', () => commitInput(which));
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { inp.blur(); return; }
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const d = (e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 0.1 : 0.01);
+      const cur = parseTime(inp.value); if (isNaN(cur)) return;
+      inp.value = fmtTime(cur + d); commitInput(which);
+    }
+    e.stopPropagation();
+  });
+}
+el.setStart.onclick = () => setStartAtPlayhead();
+el.setEnd.onclick = () => setEndAtPlayhead();
+function setStartAtPlayhead() { const p = snapTime(curPos()); if (p < S.sel.e - MIN_SEL) { S.sel.s = p; onSelectionChanged(true); } }
+function setEndAtPlayhead() { const p = snapTime(curPos()); if (p > S.sel.s + MIN_SEL) { S.sel.e = p; onSelectionChanged(true); } }
+el.selAll.onclick = () => { S.sel = { s: 0, e: S.dur }; onSelectionChanged(true); };
+el.snap.onchange = () => { S.snap = el.snap.checked; };
+
+function syncInputs() {
+  if (document.activeElement !== el.inStart) el.inStart.value = fmtTime(S.sel.s);
+  if (document.activeElement !== el.inEnd) el.inEnd.value = fmtTime(S.sel.e);
+  el.inLen.value = (S.sel.e - S.sel.s).toFixed(3) + ' s';
+  el.tRange.textContent = `/ ${fmtTime(S.sel.s)} – ${fmtTime(S.sel.e)}`;
+}
+function onSelectionChanged(live) {
+  if (S.pos < S.sel.s || S.pos >= S.sel.e) S.pos = S.sel.s;
+  syncInputs();
+  updateEstimate();
+  if (live && P.playing) queueRestart();
+  requestDraw();
+}
+
+/* ---------------------------------------------------------------- playback engine */
+const P = { src: null, gain: null, t0: 0, pos0: 0, bs: 0, be: 0, loop: true, playing: false, token: 0 };
+
+function curPos() {
+  if (!P.playing || !ctx) return S.pos;
+  const el_ = ctx.currentTime - P.t0;
+  if (P.loop) {
+    const len = P.be - P.bs;
+    return P.bs + ((((P.pos0 - P.bs + el_) % len) + len) % len);
+  }
+  return Math.min(P.pos0 + el_, P.be);
+}
+
+function fadeOutCurrent(now) {
+  if (!P.src) return;
+  try {
+    const g = P.gain.gain;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    g.linearRampToValueAtTime(0, now + 0.006);
+    P.src.onended = null;
+    P.src.stop(now + 0.01);
+  } catch (_) { /* already stopped */ }
+  P.src = null;
+}
+
+function play(from) {
+  const c = getCtx();
+  if (c.state === 'suspended') c.resume();
+  const { s, e } = S.sel;
+  let pos = from == null ? S.pos : from;
+  if (pos < s || pos >= e - 0.001) pos = s;
+  const now = c.currentTime;
+  fadeOutCurrent(now);
+  const src = c.createBufferSource();
+  src.buffer = S.buf;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0, now);
+  g.gain.linearRampToValueAtTime(1, now + 0.006);
+  src.connect(g); g.connect(master);
+  const token = ++P.token;
+  if (S.loop) {
+    src.loop = true; src.loopStart = s; src.loopEnd = e;
+    src.start(now, pos);
+  } else {
+    src.start(now, pos, e - pos);
+    src.onended = () => { if (P.token === token) { P.playing = false; P.src = null; S.pos = S.sel.s; updatePlayUI(); requestDraw(); } };
+  }
+  Object.assign(P, { src, gain: g, t0: now, pos0: pos, bs: s, be: e, loop: S.loop, playing: true });
+  updatePlayUI();
+  requestDraw();
+  animate();
+}
+function pause() {
+  if (!P.playing) return;
+  S.pos = curPos();
+  fadeOutCurrent(ctx.currentTime);
+  P.playing = false; P.token++;
+  updatePlayUI(); requestDraw();
+}
+function stop() { if (P.playing) pause(); S.pos = S.sel.s; }
+function toggle() { if (!S.buf) return; P.playing ? pause() : play(); }
+
+let restartQueued = false;
+function queueRestart() {
+  if (restartQueued) return;
+  restartQueued = true;
+  requestAnimationFrame(() => {
+    restartQueued = false;
+    if (!P.playing) return;
+    let pos = curPos();
+    if (pos < S.sel.s || pos >= S.sel.e) pos = S.sel.s;
+    play(pos);
+  });
+}
+function animate() {
+  if (!P.playing) return;
+  requestDraw();
+  requestAnimationFrame(animate);
+}
+function updatePlayUI() {
+  el.icoPlay.classList.toggle('hidden', P.playing);
+  el.icoPause.classList.toggle('hidden', !P.playing);
+  el.play.setAttribute('aria-label', P.playing ? 'Pause' : 'Play selection');
+}
+el.play.onclick = toggle;
+el.loop.onchange = () => { S.loop = el.loop.checked; if (P.playing) play(curPos()); };
+el.vol.oninput = () => { if (master) master.gain.value = +el.vol.value; };
+
+/* ---------------------------------------------------------------- keyboard */
+document.addEventListener('keydown', e => {
+  if (!S.buf || e.ctrlKey || e.metaKey || e.altKey) return;
+  const tag = e.target.tagName;
+  if (tag === 'INPUT' && e.target.type !== 'checkbox' && e.target.type !== 'range') return;
+  if (tag === 'SELECT' || tag === 'TEXTAREA') return;
+  switch (e.key) {
+    case ' ': if (tag === 'BUTTON') return; e.preventDefault(); toggle(); break;
+    case 'l': case 'L': el.loop.checked = !el.loop.checked; el.loop.onchange(); break;
+    case 'i': case 'I': setStartAtPlayhead(); break;
+    case 'o': case 'O': setEndAtPlayhead(); break;
+    case 'Home': stop(); S.pos = S.sel.s; requestDraw(); break;
+    case '+': case '=': el.zIn.onclick(); break;
+    case '-': case '_': el.zOut.onclick(); break;
+    case '0': el.zAll.onclick(); break;
+    default: return;
+  }
+});
+
+/* ---------------------------------------------------------------- open / drop */
+el.browse.onclick = () => el.fileInput.click();
+el.newFile.onclick = () => el.fileInput.click();
+el.demo.onclick = () => { getCtx(); makeDemo(); };
+el.fileInput.onchange = () => { const f = el.fileInput.files[0]; el.fileInput.value = ''; loadFile(f); };
+let dragDepth = 0;
+window.addEventListener('dragenter', e => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { dragDepth++; el.veil.classList.add('on'); el.empty.classList.add('over'); } });
+window.addEventListener('dragleave', () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) { el.veil.classList.remove('on'); el.empty.classList.remove('over'); } });
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => {
+  e.preventDefault(); dragDepth = 0; el.veil.classList.remove('on'); el.empty.classList.remove('over');
+  const f = e.dataTransfer?.files?.[0]; if (f) loadFile(f);
+});
+
+/* ---------------------------------------------------------------- export settings UI */
+const OGG_KBPS = { '-1': 45, 0: 64, 1: 80, 2: 96, 3: 112, 4: 128, 5: 160, 6: 192, 7: 224, 8: 256, 9: 320, 10: 500 };
+const MP3_VBR_KBPS = { v0: 245, v2: 190, v4: 165, v6: 115, v8: 85 };
+
+function oggKbps(q) {
+  const lo = Math.floor(q), hi = Math.ceil(q);
+  const a = OGG_KBPS[lo], b = OGG_KBPS[hi];
+  return lo === hi ? a : a + (b - a) * (q - lo);
+}
+function outRate() { return el.rate.value === 'auto' ? S.sr : +el.rate.value; }
+function outCh() { return el.ch.value === 'mono' ? 1 : (S.buf ? Math.min(2, S.buf.numberOfChannels) : 2); }
+
+function setFormat(f) {
+  S.fmt = f;
+  document.querySelectorAll('#fmtSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.fmt === f)));
+  document.querySelectorAll('.exgrid [data-for]').forEach(d => d.classList.toggle('hidden', d.dataset.for !== f));
+  // MP3 can't use every rate; the list is all MP3-valid rates, so nothing to disable.
+  updateEstimate();
+}
+document.querySelectorAll('#fmtSeg button').forEach(b => b.onclick = () => setFormat(b.dataset.fmt));
+[el.mp3Q, el.oggQ, el.wavBits, el.rate, el.ch, el.fadeIn, el.fadeOut].forEach(i => i.addEventListener('input', updateEstimate));
+el.oggQ.addEventListener('input', () => { el.oggQv.textContent = (+el.oggQ.value).toFixed(1).replace('.0', ''); });
+
+const PRESETS = {
+  tiny:     { fmt: 'mp3', mp3: 'c48',  rate: '22050', ch: 'mono' },
+  small:    { fmt: 'ogg', ogg: 3,      rate: 'auto',  ch: 'auto' },
+  balanced: { fmt: 'mp3', mp3: 'c128', rate: 'auto',  ch: 'auto' },
+  lossless: { fmt: 'wav', wav: '16',   rate: 'auto',  ch: 'auto' },
+};
+document.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => {
+  const p = PRESETS[b.dataset.preset];
+  if (p.mp3) el.mp3Q.value = p.mp3;
+  if (p.ogg != null) { el.oggQ.value = p.ogg; el.oggQ.dispatchEvent(new Event('input')); }
+  if (p.wav) el.wavBits.value = p.wav;
+  el.rate.value = p.rate;
+  el.ch.value = (p.ch === 'mono' && S.buf && S.buf.numberOfChannels === 1) ? 'auto' : p.ch;
+  setFormat(p.fmt);
+});
+
+function estimateBytes() {
+  const dur = S.sel.e - S.sel.s, rate = outRate(), ch = outCh();
+  const scale = (ch === 1 ? 0.6 : 1) * (rate >= 44100 ? 1 : Math.pow(rate / 44100, 0.6));
+  if (S.fmt === 'wav') {
+    const bytes = +el.wavBits.value / 8;
+    return { bytes: 44 + Math.round(dur * rate) * ch * bytes, exact: true };
+  }
+  if (S.fmt === 'mp3') {
+    const v = el.mp3Q.value;
+    if (v[0] === 'c') return { bytes: +v.slice(1) * 1000 / 8 * dur, exact: false };
+    return { bytes: MP3_VBR_KBPS[v] * scale * 1000 / 8 * dur, exact: false };
+  }
+  const q = +el.oggQ.value;
+  return { bytes: oggKbps(q) * scale * 1000 / 8 * dur, exact: false };
+}
+function updateEstimate() {
+  if (!S.buf) return;
+  el.oggQk.textContent = `(≈ ${Math.round(oggKbps(+el.oggQ.value))} kbps)`;
+  const { bytes, exact } = estimateBytes();
+  const raw = (S.sel.e - S.sel.s) * S.sr * S.buf.numberOfChannels * 2;
+  const pct = raw ? Math.round(100 - bytes / raw * 100) : 0;
+  el.est.innerHTML = `${exact ? '' : '≈ '}<b>${fmtBytes(bytes)}</b>` + (pct > 0 ? ` &middot; ${pct}% smaller than 16-bit PCM` : '');
+}
+
+/* ---------------------------------------------------------------- export pipeline */
+const loaded = {};
+function loadScript(src) {
+  return loaded[src] || (loaded[src] = new Promise((res, rej) => {
+    const s = document.createElement('script'); s.src = src; s.onload = res;
+    s.onerror = () => { delete loaded[src]; rej(new Error('Could not load ' + src)); };
+    document.head.appendChild(s);
+  }));
+}
+const encoderCache = {};
+async function getEncoder(kind) {
+  if (encoderCache[kind]) return encoderCache[kind];
+  await loadScript('vendor/wasm-media-encoders.min.js');
+  await loadScript(`vendor/${kind}-wasm.js`);
+  const bin = atob(window.__WASM_B64[kind]);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const enc = await window.WasmMediaEncoder.createEncoder(kind === 'mp3' ? 'audio/mpeg' : 'audio/ogg', bytes);
+  return (encoderCache[kind] = enc);
+}
+
+async function renderSlice() {
+  const b = S.buf, sr = b.sampleRate, nch = b.numberOfChannels;
+  const s0 = Math.round(S.sel.s * sr), s1 = Math.min(b.length, Math.round(S.sel.e * sr)), len = s1 - s0;
+  let chans = []; for (let c = 0; c < nch; c++) chans.push(b.getChannelData(c).slice(s0, s1));
+  let rate = sr;
+  const wantCh = outCh(), wantRate = outRate();
+  if (wantCh !== nch || wantRate !== sr) {
+    const ab = new AudioBuffer({ length: len, numberOfChannels: nch, sampleRate: sr });
+    chans.forEach((d, c) => ab.copyToChannel(d, c));
+    const oac = new OfflineAudioContext(wantCh, Math.max(1, Math.ceil(len * wantRate / sr)), wantRate);
+    const src = oac.createBufferSource(); src.buffer = ab; src.connect(oac.destination); src.start();
+    const out = await oac.startRendering();
+    chans = []; for (let c = 0; c < wantCh; c++) chans.push(out.getChannelData(c).slice());
+    rate = wantRate;
+  }
+  const n = chans[0].length;
+  if (el.norm.checked) {
+    let peak = 0;
+    for (const d of chans) for (let i = 0; i < n; i++) { const v = Math.abs(d[i]); if (v > peak) peak = v; }
+    if (peak > 0) { const gain = 0.977 / peak; for (const d of chans) for (let i = 0; i < n; i++) d[i] *= gain; }
+  }
+  const fi = Math.min(n, Math.round(Math.max(0, +el.fadeIn.value || 0) / 1000 * rate));
+  const fo = Math.min(n, Math.round(Math.max(0, +el.fadeOut.value || 0) / 1000 * rate));
+  for (const d of chans) {
+    for (let i = 0; i < fi; i++) d[i] *= i / fi;
+    for (let i = 0; i < fo; i++) d[n - 1 - i] *= i / fo;
+    for (let i = 0; i < n; i++) { const v = d[i]; d[i] = v > 1 ? 1 : v < -1 ? -1 : v; }
+  }
+  return { chans, rate };
+}
+
+async function encodeWithWasm(kind, chans, rate, cfg, onProgress) {
+  const enc = await getEncoder(kind);
+  enc.configure({ sampleRate: rate, channels: chans.length, ...cfg });
+  const CH = 1152 * 16, n = chans[0].length, parts = [];
+  let k = 0;
+  for (let i = 0; i < n; i += CH, k++) {
+    const out = enc.encode(chans.map(c => c.subarray(i, Math.min(n, i + CH))));
+    if (out.length) parts.push(out.slice());
+    if (k % 6 === 0) { onProgress(i / n); await tick(); }
+  }
+  const tail = enc.finalize();
+  if (tail.length) parts.push(tail.slice());
+  return new Blob(parts, { type: kind === 'mp3' ? 'audio/mpeg' : 'audio/ogg' });
+}
+
+function encodeWav(chans, rate, bits) {
+  const nch = chans.length, n = chans[0].length, bps = bits / 8, dataLen = n * nch * bps;
+  const buf = new ArrayBuffer(44 + dataLen), v = new DataView(buf);
+  const wr = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  wr(0, 'RIFF'); v.setUint32(4, 36 + dataLen, true); wr(8, 'WAVE'); wr(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, bits === 32 ? 3 : 1, true); v.setUint16(22, nch, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * nch * bps, true); v.setUint16(32, nch * bps, true); v.setUint16(34, bits, true);
+  wr(36, 'data'); v.setUint32(40, dataLen, true);
+  let o = 44;
+  for (let i = 0; i < n; i++) {
+    for (let c = 0; c < nch; c++) {
+      const s = chans[c][i];
+      if (bits === 16) { v.setInt16(o, Math.round(s < 0 ? s * 32768 : s * 32767), true); o += 2; }
+      else if (bits === 8) { v.setUint8(o, Math.round(s * 127.5 + 127.5)); o += 1; }
+      else if (bits === 24) { const x = Math.round(s < 0 ? s * 8388608 : s * 8388607); v.setUint8(o, x & 255); v.setUint8(o + 1, (x >> 8) & 255); v.setUint8(o + 2, (x >> 16) & 255); o += 3; }
+      else { v.setFloat32(o, s, true); o += 4; }
+    }
+  }
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
+let lastUrl = null;
+async function doExport() {
+  if (!S.buf) return;
+  el.exportBtn.disabled = true;
+  el.prog.classList.remove('hidden'); const bar = el.prog.firstElementChild; bar.style.width = '2%';
+  el.exportLbl.textContent = 'Preparing…'; setStatus('');
+  try {
+    await nextFrame();
+    const { chans, rate } = await renderSlice();
+    el.exportLbl.textContent = 'Encoding…';
+    const onProgress = p => { bar.style.width = (5 + p * 93) + '%'; el.exportLbl.textContent = `Encoding… ${Math.round(p * 100)}%`; };
+    let blob, ext;
+    if (S.fmt === 'wav') {
+      blob = encodeWav(chans, rate, +el.wavBits.value); ext = 'wav';
+    } else if (S.fmt === 'mp3') {
+      const q = el.mp3Q.value;
+      const cfg = q[0] === 'c' ? { bitrate: +q.slice(1) } : { vbrQuality: +q.slice(1) };
+      if (el.rate.value !== 'auto') cfg.outputSampleRate = rate;
+      blob = await encodeWithWasm('mp3', chans, rate, cfg, onProgress); ext = 'mp3';
+    } else {
+      blob = await encodeWithWasm('ogg', chans, rate, { vbrQuality: +el.oggQ.value }, onProgress); ext = 'ogg';
+    }
+    bar.style.width = '100%';
+    const base = S.name.replace(/\.[^.]+$/, '') || 'audio';
+    const fname = `${base}-trim.${ext}`;
+    if (lastUrl) URL.revokeObjectURL(lastUrl);
+    lastUrl = URL.createObjectURL(blob);
+    el.resAudio.src = lastUrl;
+    el.resDl.href = lastUrl; el.resDl.download = fname;
+    el.resName.textContent = fname;
+    const raw = (S.sel.e - S.sel.s) * S.sr * S.buf.numberOfChannels * 2;
+    const saved = Math.round(100 - blob.size / raw * 100);
+    el.resInfo.textContent = `${fmtBytes(blob.size)} · ${fmtTime(S.sel.e - S.sel.s)} long` + (saved > 0 ? ` · ${saved}% smaller than 16-bit PCM` : '');
+    el.result.classList.remove('hidden');
+    const a = document.createElement('a'); a.href = lastUrl; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
+    setStatus('Done — the file was downloaded. You can also audition it above.');
+  } catch (err) {
+    console.error(err);
+    setStatus('Export failed: ' + (err && err.message ? err.message : err), true);
+  } finally {
+    el.exportBtn.disabled = false; el.exportLbl.textContent = 'Export selection';
+    setTimeout(() => { el.prog.classList.add('hidden'); el.prog.firstElementChild.style.width = '0'; }, 500);
+  }
+}
+el.exportBtn.onclick = doExport;
+
+// test hook (used by automated tests; harmless in production)
+window.__trimmer = { S, openBuffer, doExport, setFormat, onSelectionChanged, play, pause, P, curPos: () => curPos() };
+
+setFormat('mp3');
+})();
+</script>
+</body>
+</html>
